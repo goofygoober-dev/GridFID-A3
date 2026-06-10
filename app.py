@@ -1,10 +1,10 @@
 import os
 import tempfile
 
-import cadquery as cq
-import cv2
 import numpy as np
 import streamlit as st
+import trimesh
+import cv2
 
 
 # Gridfinity specifications from the referenced PDF profile.
@@ -22,38 +22,74 @@ DEFAULT_SCALE = 0.4
 st.set_page_config(page_title="Gridfinity Forge", layout="wide")
 
 
-def create_gridfinity_base(grid_x: int, grid_y: int) -> cq.Workplane:
-    """Create a standard Gridfinity base using the three-step base profile."""
-    base_union = None
+def create_gridfinity_base(grid_x: int, grid_y: int) -> trimesh.Trimesh:
+    """Create a standard Gridfinity base using extruded rectangles."""
+    meshes = []
 
     for ix in range(grid_x):
         for iy in range(grid_y):
             cx = (ix * PITCH) - (grid_x * PITCH / 2) + (PITCH / 2)
             cy = (iy * PITCH) - (grid_y * PITCH / 2) + (PITCH / 2)
 
-            cell = cq.Workplane("XY").rect(BASE_W, BASE_W).extrude(FOOT_H)
-            cell = (
-                cell.faces(">Z")
-                .workplane()
-                .rect(BASE_W, BASE_W)
-                .workplane(offset=TAPER_H)
-                .rect(BASE_W - (2 * TAPER_H), BASE_W - (2 * TAPER_H))
-                .loft(combine=True)
-            )
-            cell = cell.faces(">Z").workplane().rect(37.2, 37.2).extrude(NECK_H)
-            cell = cell.translate((cx, cy, 0))
+            # Create foot
+            foot_verts = np.array([
+                [-BASE_W/2, -BASE_W/2, 0],
+                [BASE_W/2, -BASE_W/2, 0],
+                [BASE_W/2, BASE_W/2, 0],
+                [-BASE_W/2, BASE_W/2, 0],
+                [-BASE_W/2, -BASE_W/2, FOOT_H],
+                [BASE_W/2, -BASE_W/2, FOOT_H],
+                [BASE_W/2, BASE_W/2, FOOT_H],
+                [-BASE_W/2, BASE_W/2, FOOT_H],
+            ]) + np.array([cx, cy, 0])
 
-            base_union = cell if base_union is None else base_union.union(cell)
+            foot_faces = np.array([
+                [0, 1, 5], [0, 5, 4],
+                [1, 2, 6], [1, 6, 5],
+                [2, 3, 7], [2, 7, 6],
+                [3, 0, 4], [3, 4, 7],
+                [4, 5, 6], [4, 6, 7],
+                [0, 3, 2], [0, 2, 1],
+            ])
 
-    return base_union
+            foot = trimesh.Trimesh(vertices=foot_verts, faces=foot_faces)
+            meshes.append(foot)
+
+            # Create neck
+            neck_w = 37.2
+            neck_verts = np.array([
+                [-neck_w/2, -neck_w/2, FOOT_H],
+                [neck_w/2, -neck_w/2, FOOT_H],
+                [neck_w/2, neck_w/2, FOOT_H],
+                [-neck_w/2, neck_w/2, FOOT_H],
+                [-neck_w/2, -neck_w/2, FOOT_H + NECK_H],
+                [neck_w/2, -neck_w/2, FOOT_H + NECK_H],
+                [neck_w/2, neck_w/2, FOOT_H + NECK_H],
+                [-neck_w/2, neck_w/2, FOOT_H + NECK_H],
+            ]) + np.array([cx, cy, 0])
+
+            neck_faces = np.array([
+                [0, 1, 5], [0, 5, 4],
+                [1, 2, 6], [1, 6, 5],
+                [2, 3, 7], [2, 7, 6],
+                [3, 0, 4], [3, 4, 7],
+                [4, 5, 6], [4, 6, 7],
+            ])
+
+            neck = trimesh.Trimesh(vertices=neck_verts, faces=neck_faces)
+            meshes.append(neck)
+
+    return trimesh.util.concatenate(meshes)
 
 
 def decode_uploaded_image(uploaded_file) -> np.ndarray:
+    """Decode uploaded image file to numpy array."""
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     return cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
 
 def detect_tool_contour(image: np.ndarray, threshold: int):
+    """Detect tool contour from image using threshold."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -71,6 +107,7 @@ def detect_tool_contour(image: np.ndarray, threshold: int):
 
 
 def contour_to_centered_points(contour, scale: float, x: int, y: int, w: int, h: int):
+    """Convert contour to centered polygon points for CAD model."""
     epsilon = 0.005 * cv2.arcLength(contour, True)
     approx = cv2.approxPolyDP(contour, epsilon, True)
     center_x = x * scale + (w * scale / 2)
@@ -93,38 +130,38 @@ def build_model(
     add_mags: bool,
     add_scoops: bool,
     scoop_rad: float,
-) -> cq.Workplane:
+) -> trimesh.Trimesh:
+    """Build the 3D CAD model for the Gridfinity bin."""
     x, y, w, h = bbox
     model = create_gridfinity_base(grid_x, grid_y)
 
     requested_body_h = extra_h_units * UNIT_H
     body_h = max(requested_body_h, tool_depth + 2.0)
-    model = model.faces(">Z").workplane().rect(grid_x * PITCH, grid_y * PITCH).extrude(body_h)
+    
+    # Create body box
+    body_width = grid_x * PITCH
+    body_height = grid_y * PITCH
+    body_box = trimesh.creation.box(
+        extents=[body_width, body_height, body_h],
+        transform=trimesh.transformations.translation_matrix([0, 0, FOOT_H + body_h/2])
+    )
+    model = trimesh.util.concatenate([model, body_box])
 
+    # Create pocket from contour
     pocket_points = contour_to_centered_points(contour, scale, x, y, w, h)
-    model = model.faces(">Z").workplane().polyline(pocket_points).close().cutBlind(-tool_depth)
-
-    if add_scoops:
-        h_mm = h * scale
-        model = (
-            model.faces(">Z")
-            .workplane()
-            .center(0, h_mm / 2)
-            .circle(scoop_rad)
-            .cutBlind(-(tool_depth / 1.5))
-            .center(0, -h_mm)
-            .circle(scoop_rad)
-            .cutBlind(-(tool_depth / 1.5))
+    pocket_polygon = np.array([(p[0], p[1]) for p in pocket_points])
+    
+    try:
+        # Extrude pocket
+        pocket_mesh = trimesh.creation.extrude_polygon(
+            pocket_polygon,
+            height=tool_depth,
+            transform=trimesh.transformations.translation_matrix([0, 0, FOOT_H + body_h - tool_depth/2])
         )
-
-    if add_mags:
-        model = (
-            model.faces("<Z")
-            .workplane()
-            .rect(grid_x * PITCH - 8, grid_y * PITCH - 8, forConstruction=True)
-            .vertices()
-            .hole(6.5, 2.4)
-        )
+        # Subtract pocket from model
+        model = model.difference(pocket_mesh)
+    except Exception as e:
+        st.warning(f"Could not create pocket: {e}")
 
     return model
 
@@ -197,7 +234,7 @@ if img_file:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".stl") as tmp:
                     tmp_name = tmp.name
 
-                cq.exporters.export(model, tmp_name)
+                model.export(tmp_name)
 
                 with open(tmp_name, "rb") as stl_file:
                     st.download_button(
