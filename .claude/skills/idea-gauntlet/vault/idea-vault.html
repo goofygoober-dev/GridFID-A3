@@ -113,6 +113,14 @@ a{color:var(--accent)}
 .maybe .label{color:var(--warn)}
 .star-links{display:flex;flex-wrap:wrap;gap:6px}
 .star-links a{color:var(--star-fg);border:1px solid rgba(255,255,255,.35);border-radius:4px;padding:2px 8px;font-size:.82rem;text-decoration:none}
+.s-completed{background:var(--star);color:var(--star-fg)}
+.donebox{background:var(--chip);border-radius:8px;padding:12px;display:grid;gap:8px}
+.journey{display:grid;gap:0;border-left:2px solid var(--star);margin-left:6px}
+.j-item{position:relative;padding:0 0 16px 18px;display:grid;gap:3px;min-width:0}
+.j-item::before{content:"";position:absolute;left:-7px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--star);border:2px solid var(--bg)}
+.j-item.shipped::before{background:var(--ok)}
+.j-date{font:500 .75rem var(--mono);color:var(--muted)}
+.j-proud{font-size:.9rem;border-left:3px solid var(--line);padding-left:8px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:.9rem}
 @media (prefers-reduced-motion:no-preference){.pick,.item{transition:background .15s}}
 </style>
@@ -171,6 +179,12 @@ a{color:var(--accent)}
     <div class="stats" id="stats"></div>
   </section>
 
+  <section aria-labelledby="j-title" style="display:grid;gap:12px">
+    <div class="head"><h2 id="j-title">How far you've come</h2><span class="label" id="j-count"></span></div>
+    <p class="muted" style="margin:0">Ideas you finished and were happy to close, plus ones you shipped. Nothing here is unfinished; it's your record.</p>
+    <div class="journey" id="journey"></div>
+  </section>
+
   <section aria-labelledby="v-title" style="display:grid;gap:12px">
     <div class="head"><h2 id="v-title">The archive</h2><input id="search" placeholder="Search ideas" style="max-width:240px"></div>
     <div class="filters" id="filters"></div>
@@ -186,6 +200,7 @@ a{color:var(--accent)}
       <div class="stage"><span class="chip s-testing">Testing</span><p>Only one at a time, 14 days max. Job: prove people want it before building. Talk to 5 to 10 likely users, put up a one-page sign-up or pre-order, try a manual version for one person. Exit: two of three tests hit their number, or it gets parked or killed.</p></div>
       <div class="stage"><span class="chip s-pursuing">Pursuing</span><p>Earned the right to be built. Job: the smallest version that one real person uses, in 2 to 4 weeks. Exit: someone uses it or pays without you pushing them.</p></div>
       <div class="stage"><span class="chip s-shipped">Shipped</span><p>Used in the real world, even if it later changed direction. Job: write what happened and what you learned. This is your track record and portfolio.</p></div>
+      <div class="stage"><span class="chip s-completed">Completed</span><p>Finished and you're satisfied. No more work owed. It moves to How far you've come, with a note on what you got out of it.</p></div>
       <div class="stage"><span class="chip">Parked</span><p>Not now. Always has a reason. Star it if you truly want to come back.</p></div>
       <div class="stage"><span class="chip s-archived">Archived</span><p>Honestly done with. Hidden from the main list, never deleted, still searchable.</p></div>
       <div class="stage"><span class="chip s-killed">Killed</span><p>Tested and failed. The reason stays as a lesson.</p></div>
@@ -203,8 +218,8 @@ a{color:var(--accent)}
 <div class="toast" id="toast" hidden></div>
 
 <script>
-const STATUSES = ["unreviewed","spark","testing","pursuing","shipped","parked","archived","killed"];
-const STATUS_LABEL = {unreviewed:"Unreviewed",spark:"Spark",testing:"Testing",pursuing:"Pursuing",shipped:"Shipped",parked:"Parked",archived:"Archived",killed:"Killed"};
+const STATUSES = ["unreviewed","spark","testing","pursuing","shipped","completed","parked","archived","killed"];
+const STATUS_LABEL = {unreviewed:"Unreviewed",spark:"Spark",testing:"Testing",pursuing:"Pursuing",shipped:"Shipped",completed:"Completed",parked:"Parked",archived:"Archived",killed:"Killed"};
 const FITS = {helps:"Helps goal",neutral:"Neutral",distracts:"Distracts"};
 const state = { ideas: [], goal: null, filter: "all", q: "", canWrite: true };
 let db = null;
@@ -262,7 +277,7 @@ function reasonFor(i){
   return parts.join(" ");
 }
 function renderPicks(){
-  const pool = state.ideas.filter(i => !["killed","testing","pursuing","shipped","archived"].includes(i.status));
+  const pool = state.ideas.filter(i => !["killed","testing","pursuing","shipped","archived","completed"].includes(i.status));
   const picks = pool.sort((a,b)=>resurfaceScore(b)-resurfaceScore(a)).slice(0,3);
   $("picks").innerHTML = picks.length ? picks.map(i=>`
     <div class="pick">
@@ -355,14 +370,14 @@ function renderStats(){
   const shipped = state.ideas.filter(i => i.status==="shipped").length;
   const starred = state.ideas.filter(i => i.starred).length;
   const archived = state.ideas.filter(i => i.status==="archived").length;
-  const st = [["New ideas",started],["Being tested",tested],["Shipped",shipped],["Starred",starred],["Never reviewed",unreviewed],["Archived",archived],["Killed",killed]];
+  const st = [["New ideas",started],["Being tested",tested],["Shipped",shipped],["Completed",state.ideas.filter(i=>i.status==="completed").length],["Starred",starred],["Never reviewed",unreviewed],["Archived",archived],["Killed",killed]];
   $("stats").innerHTML = st.map(([k,v])=>`<div class="stat"><b>${v}</b><span class="label">${k}</span></div>`).join("");
 }
 
 /* ---------- Archive ---------- */
 function renderFilters(){
   const counts = Object.fromEntries(STATUSES.map(s=>[s,0])); state.ideas.forEach(i=>counts[i.status]=(counts[i.status]||0)+1);
-  const active = state.ideas.filter(i=>i.status!=="archived").length;
+  const active = state.ideas.filter(i=>!["archived","completed"].includes(i.status)).length;
   const opts = [["all","Active",active],["starred","★ Starred",state.ideas.filter(i=>i.starred).length], ...STATUSES.map(s=>[s,STATUS_LABEL[s],counts[s]])];
   $("filters").innerHTML = opts.map(([k,l,n])=>`<button type="button" data-f="${k}" aria-pressed="${state.filter===k}">${l} ${n}</button>`).join("");
 }
@@ -382,9 +397,10 @@ function maybeHtml(i, dis){
 function renderList(){
   const open = new Set([...document.querySelectorAll(".item details[open]")].map(d=>d.dataset.id));
   const openStar = new Set([...document.querySelectorAll(".starbox:not([hidden])")].map(d=>d.dataset.id));
+  const openDone = new Set([...document.querySelectorAll(".donebox:not([hidden])")].map(d=>d.dataset.id));
   const drafts = Object.fromEntries([...document.querySelectorAll("[data-keep]")].map(el=>[el.dataset.keep, el.value]));
   let items = state.ideas.slice();
-  if (state.filter === "all") items = items.filter(i=>i.status!=="archived");
+  if (state.filter === "all") items = items.filter(i=>!["archived","completed"].includes(i.status));
   else if (state.filter === "starred") items = items.filter(i=>i.starred);
   else items = items.filter(i=>i.status===state.filter);
   if (state.q) items = items.filter(i => (i.name+" "+(i.displayName||"")+" "+(i.summary||"")+" "+(i.oneLiner||"")+" "+(i.notes||"")+" "+(i.outcome||"")).toLowerCase().includes(state.q));
@@ -411,10 +427,18 @@ function renderList(){
       ${i.starred && i.starCritique?`<div class="critique">${esc(i.starCritique)}</div>`:""}
       <div class="actions">
         <button type="button" class="star-btn" data-star="${esc(i.id)}" aria-pressed="${!!i.starred}" ${dis}>${i.starred?"★ Starred":"☆ Star"}</button>
+        ${i.status==="completed"
+          ? `<button type="button" data-reopen="${esc(i.id)}" ${dis}>Reopen</button>`
+          : `<button type="button" data-done="${esc(i.id)}" ${dis}>✓ I'm satisfied</button>`}
         ${i.status==="archived"
           ? `<button type="button" data-restore="${esc(i.id)}" ${dis}>Restore</button>`
-          : `<button type="button" data-archive="${esc(i.id)}" ${dis}>Archive</button>`}
+          : i.status==="completed" ? "" : `<button type="button" data-archive="${esc(i.id)}" ${dis}>Archive</button>`}
         <button type="button" data-touch="${esc(i.id)}" ${dis}>Worked on it today</button>
+      </div>
+      <div class="donebox" data-id="${esc(i.id)}" ${openDone.has(i.id)?"":"hidden"}>
+        <label for="proud-${esc(i.id)}"><strong>Closing this one.</strong> What did you get out of it? A skill, a result, something you made. Optional, but future you will like reading it.</label>
+        <textarea id="proud-${esc(i.id)}" data-keep="proud-${esc(i.id)}">${esc(i.proudOf)}</textarea>
+        <div class="row"><button class="primary" type="button" data-done-save="${esc(i.id)}">Mark as done</button><button type="button" data-done-cancel="${esc(i.id)}">Cancel</button></div>
       </div>
       <div class="starbox" data-id="${esc(i.id)}" ${openStar.has(i.id)?"":"hidden"}>
         <label for="why-${esc(i.id)}"><strong>Why does this one deserve a star?</strong> What makes it different from the other ${state.ideas.length - 1} ideas, and what would you do first if you had the time?</label>
@@ -455,6 +479,14 @@ $("list").addEventListener("click", async e => {
   }
   else if (d.starCancel){ document.querySelector(`.starbox[data-id="${CSS.escape(d.starCancel)}"]`).hidden = true; }
   else if (d.starSave){ await starIdea(d.starSave, b); }
+  else if (d.done){ const box = document.querySelector(`.donebox[data-id="${CSS.escape(d.done)}"]`); box.hidden = false; box.querySelector("textarea").focus(); }
+  else if (d.doneCancel){ document.querySelector(`.donebox[data-id="${CSS.escape(d.doneCancel)}"]`).hidden = true; }
+  else if (d.doneSave){
+    const i = byId(d.doneSave); const box = document.querySelector(`.donebox[data-id="${CSS.escape(d.doneSave)}"]`);
+    await patch(d.doneSave, { status:"completed", statusBeforeComplete: i?.status || "spark", completedAt: today(), proudOf: box.querySelector("textarea").value.trim(), lastTouched: today() });
+    box.hidden = true; toast("Done and kept. It's in How far you've come.");
+  }
+  else if (d.reopen){ const i = byId(d.reopen); await patch(d.reopen, { status: i?.statusBeforeComplete || "parked" }); toast("Reopened"); }
   else if (d.linkYes){ const [id,idx]=d.linkYes.split("|"); await moveLink(id, idx, true); }
   else if (d.linkNo){ const [id,idx]=d.linkNo.split("|"); await moveLink(id, idx, false); }
 });
@@ -539,7 +571,21 @@ $("import-btn").onclick = async () => {
 };
 
 /* ---------- Boot ---------- */
-function renderAll(){ renderGoal(); renderPicks(); renderNudge(); renderStats(); renderFilters(); renderList(); }
+function renderJourney(){
+  const wins = state.ideas.filter(i => i.status==="completed" || i.status==="shipped")
+    .map(i => ({ i, when: i.completedAt || i.lastTouched || i.born || "" }))
+    .sort((a,b)=> b.when.localeCompare(a.when));
+  $("j-count").textContent = wins.length ? `${wins.length} closed with something to show` : "";
+  $("journey").innerHTML = wins.length ? wins.map(({i,when})=>`
+    <div class="j-item ${i.status}">
+      <span class="j-date">${when ? new Date(when).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}) : ""} · ${STATUS_LABEL[i.status]}</span>
+      <strong>${esc(title(i))}</strong>
+      ${i.summary||i.oneLiner?`<span class="muted" style="font-size:.9rem">${esc(i.summary||i.oneLiner)}</span>`:""}
+      ${i.proudOf?`<div class="j-proud">${esc(i.proudOf)}</div>`:""}
+      ${i.outcome?`<div class="j-proud">${esc(i.outcome)}</div>`:""}
+    </div>`).join("") : `<div class="empty" style="margin-left:12px">Nothing here yet. When you finish something you're happy with, press "I'm satisfied" on it and it lands here.</div>`;
+}
+function renderAll(){ renderJourney(); renderGoal(); renderPicks(); renderNudge(); renderStats(); renderFilters(); renderList(); }
 renderAll();
 (async () => {
   db = await claude.use("db");
@@ -551,7 +597,7 @@ renderAll();
   db.doc("goals/north-star").onSnapshot(s => { state.goal = s.exists ? s.data() : null; renderGoal(); }, () => {});
   db.collection("ideas").onSnapshot(s => {
     state.ideas = s.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderPicks(); renderNudge(); renderStats(); renderFilters(); renderList();
+    renderPicks(); renderNudge(); renderStats(); renderFilters(); renderList(); renderJourney();
   }, () => { $("list").innerHTML = `<div class="empty">The vault couldn't load. Reload the page to try again.</div>`; });
   sample = await claude.use("sample");
   $("ask").hidden = !sample;

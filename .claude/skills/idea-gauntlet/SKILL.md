@@ -200,8 +200,12 @@ At the end of every mode, save what changed:
 ```
   Include `goal` only when the North Star changed.
 
-Status is one of unreviewed, spark, testing, pursuing, shipped, parked,
-archived, killed. **Shipped** means it was used in the real world, even if it
+Status is one of unreviewed, spark, testing, pursuing, shipped, completed,
+parked, archived, killed. **Completed** means the user finished it and is
+satisfied: no more work owed. Save `completedAt`, `statusBeforeComplete` and an
+optional `proudOf` (what they got out of it). Completed and shipped ideas form
+the "How far you've come" record: when the user feels stuck or unproductive,
+remind them of it with specifics. Never resurface completed ideas as work. **Shipped** means it was used in the real world, even if it
 later changed direction; always record `outcome` (what happened, what it became,
 what was learned). **Archived** means honestly done with: never delete, keep
 `statusBeforeArchive`. Suggest archiving any idea quiet for 90+ days that is
