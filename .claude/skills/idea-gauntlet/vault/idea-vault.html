@@ -102,6 +102,17 @@ a{color:var(--accent)}
 .stage{display:grid;grid-template-columns:120px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
 .stage p{margin:0}
 @media (max-width:640px){.stage{grid-template-columns:1fr;gap:4px}}
+.summary{font-size:.95rem;max-width:70ch}
+.repo-name{font:400 .75rem var(--mono);color:var(--muted)}
+.where{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.82rem}
+.loc{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--line);border-radius:4px;padding:2px 8px;background:var(--surface);text-decoration:none;color:var(--ink)}
+.loc b{font:500 .68rem var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.maybe{border:1px dashed var(--warn);border-radius:8px;padding:10px;display:grid;gap:6px;font-size:.85rem}
+.maybe-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between}
+.maybe-row > div{min-width:0;overflow-wrap:anywhere}
+.maybe .label{color:var(--warn)}
+.star-links{display:flex;flex-wrap:wrap;gap:6px}
+.star-links a{color:var(--star-fg);border:1px solid rgba(255,255,255,.35);border-radius:4px;padding:2px 8px;font-size:.82rem;text-decoration:none}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:.9rem}
 @media (prefers-reduced-motion:no-preference){.pick,.item{transition:background .15s}}
 </style>
@@ -215,7 +226,8 @@ function renderGoal(){
   if (g?.deadline){ const left = Math.ceil((new Date(g.deadline) - Date.now())/DAY); meta.push(`${left >= 0 ? left + " days left" : Math.abs(left) + " days past deadline"}`); }
   if (g?.weekly) meta.push("This week: " + g.weekly);
   if (g?.next) meta.push("Next: " + g.next);
-  $("star-meta").innerHTML = meta.map(m=>`<span>${esc(m)}</span>`).join("");
+  $("star-meta").innerHTML = meta.map(m=>`<span>${esc(m)}</span>`).join("")
+    + ((g?.links||[]).length ? `<div class="star-links">${g.links.map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}</div>` : "");
 }
 $("star-edit").onclick = () => {
   const g = state.goal || {};
@@ -254,8 +266,8 @@ function renderPicks(){
   const picks = pool.sort((a,b)=>resurfaceScore(b)-resurfaceScore(a)).slice(0,3);
   $("picks").innerHTML = picks.length ? picks.map(i=>`
     <div class="pick">
-      <div class="row" style="justify-content:space-between"><h3>${esc(i.name)}</h3><span class="chip s-${i.status}">${STATUS_LABEL[i.status]||i.status}</span></div>
-      ${i.oneLiner?`<div>${esc(i.oneLiner)}</div>`:""}
+      <div class="row" style="justify-content:space-between"><h3>${esc(title(i))}</h3><span class="chip s-${i.status}">${STATUS_LABEL[i.status]||i.status}</span></div>
+      ${(i.summary||i.oneLiner)?`<div>${esc(i.summary||i.oneLiner)}</div>`:""}
       <div class="why">${esc(reasonFor(i))}</div>
       <div class="row"><button type="button" data-act="test" data-id="${esc(i.id)}">Start testing</button><button type="button" data-act="archive" data-id="${esc(i.id)}">Archive</button></div>
     </div>`).join("") : `<div class="empty">Nothing to resurface yet. Capture a spark below, or paste ideas from a chat.</div>`;
@@ -286,9 +298,9 @@ function vaultText(){
   lines.push("| id | name | status | starred | goal fit | score/16 | days quiet | why stopped | outcome | one line | links |");
   lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
   for (const i of state.ideas){
-    const links = (i.assets||[]).map(a=>a.url).join(" ");
+    const links = [...(i.location||i.assets||[])].map(a=>a.url).join(" ");
     const cell = v => String(v||"").replace(/\|/g,"/").replace(/\n/g," ");
-    lines.push(`| ${i.id} | ${i.name} | ${i.status} | ${i.starred?"yes: "+cell(i.starWhy):""} | ${i.goalFit||"?"} | ${i.score??"-"} | ${daysSince(i.lastTouched||i.born)??"-"} | ${cell(i.whyStopped)} | ${cell(i.outcome)} | ${cell(i.oneLiner)} | ${links} |`);
+    lines.push(`| ${i.id} | ${cell(title(i))} (${i.name}) | ${i.status} | ${i.starred?"yes: "+cell(i.starWhy):""} | ${i.goalFit||"?"} | ${i.score??"-"} | ${daysSince(i.lastTouched||i.born)??"-"} | ${cell(i.whyStopped)} | ${cell(i.outcome)} | ${cell(i.summary||i.oneLiner)} | ${links} |`);
   }
   return lines.join("\n");
 }
@@ -357,6 +369,16 @@ function renderFilters(){
 $("filters").onclick = e => { const b=e.target.closest("button[data-f]"); if(!b) return; state.filter=b.dataset.f; renderFilters(); renderList(); };
 $("search").oninput = e => { state.q = e.target.value.toLowerCase(); renderList(); };
 
+const title = i => i.displayName || i.name;
+function whereHtml(i){
+  const locs = (i.location && i.location.length) ? i.location : (i.assets||[]);
+  if (!locs.length) return "";
+  return `<div class="where"><span class="label">Lives in</span>${locs.map(l=>`<a class="loc" href="${esc(l.url)}" target="_blank" rel="noopener"><b>${esc(l.type||"link")}</b>${esc(l.label||"open")}</a>`).join("")}</div>`;
+}
+function maybeHtml(i, dis){
+  const m = i.maybeLinked||[]; if(!m.length) return "";
+  return `<div class="maybe"><span class="label">Unsure, might belong here</span>${m.map((l,idx)=>`<div class="maybe-row"><div><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a> <span class="muted">(${esc(l.type)}) ${esc(l.reason||"")}</span></div><div class="actions"><button type="button" data-link-yes="${esc(i.id)}|${idx}" ${dis}>Yes, link it</button><button type="button" data-link-no="${esc(i.id)}|${idx}" ${dis}>Not this</button></div></div>`).join("")}</div>`;
+}
 function renderList(){
   const open = new Set([...document.querySelectorAll(".item details[open]")].map(d=>d.dataset.id));
   const openStar = new Set([...document.querySelectorAll(".starbox:not([hidden])")].map(d=>d.dataset.id));
@@ -365,7 +387,7 @@ function renderList(){
   if (state.filter === "all") items = items.filter(i=>i.status!=="archived");
   else if (state.filter === "starred") items = items.filter(i=>i.starred);
   else items = items.filter(i=>i.status===state.filter);
-  if (state.q) items = items.filter(i => (i.name+" "+(i.oneLiner||"")+" "+(i.notes||"")+" "+(i.outcome||"")).toLowerCase().includes(state.q));
+  if (state.q) items = items.filter(i => (i.name+" "+(i.displayName||"")+" "+(i.summary||"")+" "+(i.oneLiner||"")+" "+(i.notes||"")+" "+(i.outcome||"")).toLowerCase().includes(state.q));
   items.sort((a,b)=> (b.lastTouched||b.born||"").localeCompare(a.lastTouched||a.born||""));
   if (!items.length){ $("list").innerHTML = `<div class="empty">${state.ideas.length ? "No ideas match this filter." : "The vault is empty. Capture your first spark above."}</div>`; return; }
   const dis = state.canWrite ? "" : "disabled";
@@ -373,8 +395,10 @@ function renderList(){
     const quiet = daysSince(i.lastTouched||i.born);
     const links = (i.assets||[]).map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.label||a.type||"link")}</a>`).join(" · ");
     return `<div class="item">
-      <div class="item-top"><h3>${i.starred?"★ ":""}${esc(i.name)}</h3><div class="row"><span class="quiet ${quiet>=30?"old":""}" title="Days since you last touched it">${quiet!=null?`${quiet}d quiet`:"no date"}</span><span class="chip s-${esc(i.status)}">${STATUS_LABEL[i.status]||esc(i.status)}</span></div></div>
-      ${i.oneLiner?`<div>${esc(i.oneLiner)}</div>`:""}
+      <div class="item-top"><div style="min-width:0"><h3>${i.starred?"★ ":""}${esc(title(i))}</h3>${i.displayName && i.displayName!==i.name?`<div class="repo-name">${esc(i.name)}</div>`:""}</div><div class="row"><span class="quiet ${quiet>=30?"old":""}" title="Days since you last touched it">${quiet!=null?`${quiet}d quiet`:"no date"}</span><span class="chip s-${esc(i.status)}">${STATUS_LABEL[i.status]||esc(i.status)}</span></div></div>
+      ${i.summary?`<div class="summary">${esc(i.summary)}</div>`:(i.oneLiner?`<div>${esc(i.oneLiner)}</div>`:"")}
+      ${whereHtml(i)}
+      ${maybeHtml(i, dis)}
       <div class="facts">
         ${i.goalFit?`<span class="fit-${esc(i.goalFit)}">${FITS[i.goalFit]||esc(i.goalFit)}</span>`:""}
         ${i.score!=null && i.score!==""?`<span>score ${esc(i.score)}/16</span>`:""}
@@ -431,8 +455,17 @@ $("list").addEventListener("click", async e => {
   }
   else if (d.starCancel){ document.querySelector(`.starbox[data-id="${CSS.escape(d.starCancel)}"]`).hidden = true; }
   else if (d.starSave){ await starIdea(d.starSave, b); }
+  else if (d.linkYes){ const [id,idx]=d.linkYes.split("|"); await moveLink(id, idx, true); }
+  else if (d.linkNo){ const [id,idx]=d.linkNo.split("|"); await moveLink(id, idx, false); }
 });
 const byId = id => state.ideas.find(i=>i.id===id);
+async function moveLink(id, idx, keep){
+  const i = byId(id); if(!i) return;
+  const maybe = (i.maybeLinked||[]).slice(); const [l] = maybe.splice(Number(idx),1); if(!l) return;
+  const data = { maybeLinked: maybe };
+  if (keep) data.location = [...(i.location||[]), { type:l.type, label:l.label, url:l.url }];
+  await patch(id, data); toast(keep ? "Linked to this project" : "Removed from the unsure list");
+}
 async function archive(id){
   const i = byId(id);
   await patch(id, { status:"archived", statusBeforeArchive: i?.status || "parked", archivedAt: today() });

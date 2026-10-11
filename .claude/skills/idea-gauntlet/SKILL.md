@@ -182,9 +182,14 @@ tests by <date>."
 At the end of every mode, save what changed:
 
 - **If `ArtifactData` is available:** write to the vault URL directly. New ideas
-  go in `ideas/<slug>` with name, oneLiner, status, goalFit, score, nextStep,
-  checkIn, born and lastTouched (ISO dates), plus whyStopped when parked or
-  killed. Update existing ideas with `update`, pinned to the version you read.
+  go in `ideas/<slug>` with name, displayName (a plain-English title, since
+  repo names are cryptic), summary (2-3 sentences: what it is, who it's for,
+  how far it got), location (list of {type, label, url}: GitHub repo, Drive
+  folder, Claude chat, AI Studio, deployed URL), maybeLinked (list of {type,
+  label, url, reason} for things that look related but aren't confirmed),
+  oneLiner, status, goalFit, score, nextStep, checkIn, born and lastTouched (ISO
+  dates), plus whyStopped when parked or killed. Never move a maybeLinked item
+  into location yourself; the user confirms it on the page. Update existing ideas with `update`, pinned to the version you read.
   Never delete ideas; killed ideas stay as the record.
 - **Otherwise:** end with a fenced block the user pastes into the vault's
   "Bring it into a chat" box:
