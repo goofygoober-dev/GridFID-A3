@@ -51,10 +51,21 @@ Pick the mode from what the user asks:
   idea** → run *Resurface*.
 - **Returning with test results** → update the idea's status and run Phase 5 only.
 
+### Star
+
+When the user wants to star an idea (a favourite they ran out of time for), ask
+why first: what makes it different from their other ideas, and what they would
+do first. Then critique the reason in under 120 words: **Strong** (what is
+solid), **Weak** (what sounds like novelty, guilt or hyperfixation), **Answer
+this** (one question before touching it again), **Verdict** (Keep the star /
+Keep the star if <condition> / Archive it) and how it relates to the North Star.
+Save `starred: true`, `starWhy` and `starCritique`. Starred ideas rank first in
+Resurface.
+
 ### Resurface
 
-From the vault, ignoring killed, testing and pursuing ideas, rank by: goal fit
-(helps first), previous score, and how long since lastTouched. Show the top 3,
+From the vault, ignoring killed, testing, pursuing, shipped and archived ideas,
+rank by: starred, goal fit (helps first), previous score, and how long since lastTouched. Show the top 3,
 each with: what it was, how long it has been quiet, why it stalled (quote
 whyStopped, or say it was never recorded), and how it could serve the North
 Star. Then give exactly one recommendation: either one idea to give 2 hours this
@@ -184,7 +195,12 @@ At the end of every mode, save what changed:
 ```
   Include `goal` only when the North Star changed.
 
-Status is one of unreviewed, spark, testing, pursuing, parked, killed. Passed
+Status is one of unreviewed, spark, testing, pursuing, shipped, parked,
+archived, killed. **Shipped** means it was used in the real world, even if it
+later changed direction; always record `outcome` (what happened, what it became,
+what was learned). **Archived** means honestly done with: never delete, keep
+`statusBeforeArchive`. Suggest archiving any idea quiet for 90+ days that is
+neither starred nor marked helps. Passed
 tests move an idea toward pursuing; missed deadlines or failed thresholds move it
 to parked or killed, always with a one-line whyStopped so future-you knows. If the
 vault shows three or more sparks in the last 30 days with nothing tested, point

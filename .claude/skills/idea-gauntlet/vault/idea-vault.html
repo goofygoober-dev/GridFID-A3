@@ -89,6 +89,19 @@ textarea{min-height:72px;resize:vertical}
 a{color:var(--accent)}
 .empty{padding:20px;border:1px dashed var(--line);border-radius:8px;color:var(--muted)}
 .bridge{display:grid;gap:8px}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+.actions button{padding:4px 10px;font-size:.85rem}
+.star-btn[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.quiet{font:600 .8rem var(--mono);padding:3px 7px;border-radius:4px;background:var(--chip)}
+.quiet.old{background:var(--accent-soft);color:var(--accent)}
+.starbox{background:var(--accent-soft);border-radius:8px;padding:12px;display:grid;gap:8px}
+.critique{border-left:3px solid var(--accent);padding-left:10px;white-space:pre-wrap;font-size:.92rem}
+.s-shipped{background:var(--ok);color:var(--surface)}
+.s-archived{color:var(--muted)}
+.stages{display:grid;gap:0;border-top:1px solid var(--line)}
+.stage{display:grid;grid-template-columns:120px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.stage p{margin:0}
+@media (max-width:640px){.stage{grid-template-columns:1fr;gap:4px}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:.9rem}
 @media (prefers-reduced-motion:no-preference){.pick,.item{transition:background .15s}}
 </style>
@@ -153,6 +166,21 @@ a{color:var(--accent)}
     <div class="list" id="list"></div>
   </section>
 
+  <section aria-labelledby="st-title" style="display:grid;gap:10px">
+    <h2 id="st-title">How an idea moves</h2>
+    <p class="muted" style="margin:0">Each stage has one job and one exit test. Nothing moves forward on enthusiasm alone.</p>
+    <div class="stages">
+      <div class="stage"><span class="chip s-unreviewed">Unreviewed</span><p>Found in an old repo or chat. Job: write one line on what it was and why it stalled, then sort it. Two minutes each.</p></div>
+      <div class="stage"><span class="chip">Spark</span><p>A captured idea. Job: nothing yet. It waits until nothing else is in testing. Exit: you run the Idea Gauntlet on it.</p></div>
+      <div class="stage"><span class="chip s-testing">Testing</span><p>Only one at a time, 14 days max. Job: prove people want it before building. Talk to 5 to 10 likely users, put up a one-page sign-up or pre-order, try a manual version for one person. Exit: two of three tests hit their number, or it gets parked or killed.</p></div>
+      <div class="stage"><span class="chip s-pursuing">Pursuing</span><p>Earned the right to be built. Job: the smallest version that one real person uses, in 2 to 4 weeks. Exit: someone uses it or pays without you pushing them.</p></div>
+      <div class="stage"><span class="chip s-shipped">Shipped</span><p>Used in the real world, even if it later changed direction. Job: write what happened and what you learned. This is your track record and portfolio.</p></div>
+      <div class="stage"><span class="chip">Parked</span><p>Not now. Always has a reason. Star it if you truly want to come back.</p></div>
+      <div class="stage"><span class="chip s-archived">Archived</span><p>Honestly done with. Hidden from the main list, never deleted, still searchable.</p></div>
+      <div class="stage"><span class="chip s-killed">Killed</span><p>Tested and failed. The reason stays as a lesson.</p></div>
+    </div>
+  </section>
+
   <section class="bridge" aria-labelledby="b-title">
     <h2 id="b-title">Bring it into a chat</h2>
     <p class="muted" style="margin:0">Copy the vault, paste it into any Claude chat, and the Idea Gauntlet skill checks new ideas against everything here. When Claude hands back an <code>idea-vault</code> JSON block, paste it below to save it.</p>
@@ -164,8 +192,8 @@ a{color:var(--accent)}
 <div class="toast" id="toast" hidden></div>
 
 <script>
-const STATUSES = ["unreviewed","spark","testing","pursuing","parked","killed"];
-const STATUS_LABEL = {unreviewed:"Unreviewed",spark:"Spark",testing:"Testing",pursuing:"Pursuing",parked:"Parked",killed:"Killed"};
+const STATUSES = ["unreviewed","spark","testing","pursuing","shipped","parked","archived","killed"];
+const STATUS_LABEL = {unreviewed:"Unreviewed",spark:"Spark",testing:"Testing",pursuing:"Pursuing",shipped:"Shipped",parked:"Parked",archived:"Archived",killed:"Killed"};
 const FITS = {helps:"Helps goal",neutral:"Neutral",distracts:"Distracts"};
 const state = { ideas: [], goal: null, filter: "all", q: "", canWrite: true };
 let db = null;
@@ -205,7 +233,7 @@ $("star-form").onsubmit = async e => {
 
 /* ---------- Resurface ---------- */
 function resurfaceScore(i){
-  const fit = i.goalFit === "helps" ? 3 : i.goalFit === "distracts" ? -2 : 0;
+  const fit = (i.goalFit === "helps" ? 3 : i.goalFit === "distracts" ? -2 : 0) + (i.starred ? 4 : 0);
   const quality = (Number(i.score)||0) / 16 * 3;
   const quiet = Math.min((daysSince(i.lastTouched || i.born) ?? 0) / 30, 3);
   return fit + quality + quiet;
@@ -214,6 +242,7 @@ function reasonFor(i){
   const d = daysSince(i.lastTouched || i.born);
   const parts = [];
   if (d != null) parts.push(`Untouched for ${d} day${d===1?"":"s"}.`);
+  if (i.starred) parts.push("You starred it.");
   if (i.goalFit === "helps") parts.push("You marked it as helping your North Star.");
   if (i.score) parts.push(`Scored ${i.score}/16 last time.`);
   if (i.whyStopped) parts.push(`You stopped because: ${i.whyStopped}`);
@@ -221,14 +250,14 @@ function reasonFor(i){
   return parts.join(" ");
 }
 function renderPicks(){
-  const pool = state.ideas.filter(i => !["killed","testing","pursuing"].includes(i.status));
+  const pool = state.ideas.filter(i => !["killed","testing","pursuing","shipped","archived"].includes(i.status));
   const picks = pool.sort((a,b)=>resurfaceScore(b)-resurfaceScore(a)).slice(0,3);
   $("picks").innerHTML = picks.length ? picks.map(i=>`
     <div class="pick">
       <div class="row" style="justify-content:space-between"><h3>${esc(i.name)}</h3><span class="chip s-${i.status}">${STATUS_LABEL[i.status]||i.status}</span></div>
       ${i.oneLiner?`<div>${esc(i.oneLiner)}</div>`:""}
       <div class="why">${esc(reasonFor(i))}</div>
-      <div class="row"><button type="button" data-act="test" data-id="${esc(i.id)}">Start testing</button><button type="button" data-act="kill" data-id="${esc(i.id)}">Let it go</button></div>
+      <div class="row"><button type="button" data-act="test" data-id="${esc(i.id)}">Start testing</button><button type="button" data-act="archive" data-id="${esc(i.id)}">Archive</button></div>
     </div>`).join("") : `<div class="empty">Nothing to resurface yet. Capture a spark below, or paste ideas from a chat.</div>`;
 }
 $("picks").onclick = async e => {
@@ -241,7 +270,7 @@ $("picks").onclick = async e => {
     await patch(id,{status:"testing", checkIn: new Date(Date.now()+14*DAY).toISOString().slice(0,10)});
     toast("Testing. Check-in set for 14 days out.");
   } else {
-    await patch(id,{status:"killed"}); toast("Let go. It stays in the archive.");
+    await archive(id);
   }
 };
 
@@ -254,11 +283,12 @@ function vaultText(){
   lines.push("## North Star");
   lines.push(g ? `${g.title}${g.deadline?` (deadline ${g.deadline})`:""}\nWhy: ${g.why||"-"}\nWeekly target: ${g.weekly||"-"}\nNext action: ${g.next||"-"}` : "Not set");
   lines.push("## Ideas");
-  lines.push("| id | name | status | goal fit | score/16 | days quiet | why stopped | one line | links |");
-  lines.push("|---|---|---|---|---|---|---|---|---|");
+  lines.push("| id | name | status | starred | goal fit | score/16 | days quiet | why stopped | outcome | one line | links |");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
   for (const i of state.ideas){
     const links = (i.assets||[]).map(a=>a.url).join(" ");
-    lines.push(`| ${i.id} | ${i.name} | ${i.status} | ${i.goalFit||"?"} | ${i.score??"-"} | ${daysSince(i.lastTouched||i.born)??"-"} | ${(i.whyStopped||"").replace(/\|/g,"/")} | ${(i.oneLiner||"").replace(/\|/g,"/")} | ${links} |`);
+    const cell = v => String(v||"").replace(/\|/g,"/").replace(/\n/g," ");
+    lines.push(`| ${i.id} | ${i.name} | ${i.status} | ${i.starred?"yes: "+cell(i.starWhy):""} | ${i.goalFit||"?"} | ${i.score??"-"} | ${daysSince(i.lastTouched||i.born)??"-"} | ${cell(i.whyStopped)} | ${cell(i.outcome)} | ${cell(i.oneLiner)} | ${links} |`);
   }
   return lines.join("\n");
 }
@@ -310,14 +340,18 @@ function renderStats(){
   const tested = state.ideas.filter(i => ["testing","pursuing"].includes(i.status)).length;
   const killed = state.ideas.filter(i => i.status==="killed").length;
   const unreviewed = state.ideas.filter(i => i.status==="unreviewed").length;
-  const st = [["New ideas",started],["Being tested",tested],["Let go",killed],["Never reviewed",unreviewed],["Total in vault",state.ideas.length]];
+  const shipped = state.ideas.filter(i => i.status==="shipped").length;
+  const starred = state.ideas.filter(i => i.starred).length;
+  const archived = state.ideas.filter(i => i.status==="archived").length;
+  const st = [["New ideas",started],["Being tested",tested],["Shipped",shipped],["Starred",starred],["Never reviewed",unreviewed],["Archived",archived],["Killed",killed]];
   $("stats").innerHTML = st.map(([k,v])=>`<div class="stat"><b>${v}</b><span class="label">${k}</span></div>`).join("");
 }
 
 /* ---------- Archive ---------- */
 function renderFilters(){
   const counts = Object.fromEntries(STATUSES.map(s=>[s,0])); state.ideas.forEach(i=>counts[i.status]=(counts[i.status]||0)+1);
-  const opts = [["all","All",state.ideas.length], ...STATUSES.map(s=>[s,STATUS_LABEL[s],counts[s]])];
+  const active = state.ideas.filter(i=>i.status!=="archived").length;
+  const opts = [["all","Active",active],["starred","★ Starred",state.ideas.filter(i=>i.starred).length], ...STATUSES.map(s=>[s,STATUS_LABEL[s],counts[s]])];
   $("filters").innerHTML = opts.map(([k,l,n])=>`<button type="button" data-f="${k}" aria-pressed="${state.filter===k}">${l} ${n}</button>`).join("");
 }
 $("filters").onclick = e => { const b=e.target.closest("button[data-f]"); if(!b) return; state.filter=b.dataset.f; renderFilters(); renderList(); };
@@ -325,9 +359,13 @@ $("search").oninput = e => { state.q = e.target.value.toLowerCase(); renderList(
 
 function renderList(){
   const open = new Set([...document.querySelectorAll(".item details[open]")].map(d=>d.dataset.id));
+  const openStar = new Set([...document.querySelectorAll(".starbox:not([hidden])")].map(d=>d.dataset.id));
+  const drafts = Object.fromEntries([...document.querySelectorAll("[data-keep]")].map(el=>[el.dataset.keep, el.value]));
   let items = state.ideas.slice();
-  if (state.filter !== "all") items = items.filter(i=>i.status===state.filter);
-  if (state.q) items = items.filter(i => (i.name+" "+(i.oneLiner||"")+" "+(i.notes||"")).toLowerCase().includes(state.q));
+  if (state.filter === "all") items = items.filter(i=>i.status!=="archived");
+  else if (state.filter === "starred") items = items.filter(i=>i.starred);
+  else items = items.filter(i=>i.status===state.filter);
+  if (state.q) items = items.filter(i => (i.name+" "+(i.oneLiner||"")+" "+(i.notes||"")+" "+(i.outcome||"")).toLowerCase().includes(state.q));
   items.sort((a,b)=> (b.lastTouched||b.born||"").localeCompare(a.lastTouched||a.born||""));
   if (!items.length){ $("list").innerHTML = `<div class="empty">${state.ideas.length ? "No ideas match this filter." : "The vault is empty. Capture your first spark above."}</div>`; return; }
   const dis = state.canWrite ? "" : "disabled";
@@ -335,16 +373,30 @@ function renderList(){
     const quiet = daysSince(i.lastTouched||i.born);
     const links = (i.assets||[]).map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.label||a.type||"link")}</a>`).join(" · ");
     return `<div class="item">
-      <div class="item-top"><h3>${esc(i.name)}</h3><div class="row"><span class="chip s-${esc(i.status)}">${STATUS_LABEL[i.status]||esc(i.status)}</span></div></div>
+      <div class="item-top"><h3>${i.starred?"★ ":""}${esc(i.name)}</h3><div class="row"><span class="quiet ${quiet>=30?"old":""}" title="Days since you last touched it">${quiet!=null?`${quiet}d quiet`:"no date"}</span><span class="chip s-${esc(i.status)}">${STATUS_LABEL[i.status]||esc(i.status)}</span></div></div>
       ${i.oneLiner?`<div>${esc(i.oneLiner)}</div>`:""}
       <div class="facts">
-        <span>${quiet!=null?`quiet ${quiet}d`:"no date"}</span>
         ${i.goalFit?`<span class="fit-${esc(i.goalFit)}">${FITS[i.goalFit]||esc(i.goalFit)}</span>`:""}
         ${i.score!=null && i.score!==""?`<span>score ${esc(i.score)}/16</span>`:""}
         ${i.checkIn?`<span>check-in ${esc(i.checkIn)}</span>`:""}
         ${links?`<span>${links}</span>`:""}
       </div>
       ${i.whyStopped?`<div class="muted" style="font-size:.9rem">Stopped because: ${esc(i.whyStopped)}</div>`:""}
+      ${i.outcome?`<div style="font-size:.9rem"><strong>What happened:</strong> ${esc(i.outcome)}</div>`:""}
+      ${i.starred && i.starWhy?`<div style="font-size:.9rem"><strong>Why it's starred:</strong> ${esc(i.starWhy)}</div>`:""}
+      ${i.starred && i.starCritique?`<div class="critique">${esc(i.starCritique)}</div>`:""}
+      <div class="actions">
+        <button type="button" class="star-btn" data-star="${esc(i.id)}" aria-pressed="${!!i.starred}" ${dis}>${i.starred?"★ Starred":"☆ Star"}</button>
+        ${i.status==="archived"
+          ? `<button type="button" data-restore="${esc(i.id)}" ${dis}>Restore</button>`
+          : `<button type="button" data-archive="${esc(i.id)}" ${dis}>Archive</button>`}
+        <button type="button" data-touch="${esc(i.id)}" ${dis}>Worked on it today</button>
+      </div>
+      <div class="starbox" data-id="${esc(i.id)}" ${openStar.has(i.id)?"":"hidden"}>
+        <label for="why-${esc(i.id)}"><strong>Why does this one deserve a star?</strong> What makes it different from the other ${state.ideas.length - 1} ideas, and what would you do first if you had the time?</label>
+        <textarea id="why-${esc(i.id)}" data-keep="why-${esc(i.id)}">${esc(i.starWhy)}</textarea>
+        <div class="row"><button class="primary" type="button" data-star-save="${esc(i.id)}">Star it and get feedback</button><button type="button" data-star-cancel="${esc(i.id)}">Cancel</button></div>
+      </div>
       <details data-id="${esc(i.id)}" ${open.has(i.id)?"open":""}><summary>Edit</summary>
         <form class="edit" data-id="${esc(i.id)}">
           <label>Status<select name="status" ${dis}>${STATUSES.map(s=>`<option value="${s}" ${s===i.status?"selected":""}>${STATUS_LABEL[s]}</option>`).join("")}</select></label>
@@ -352,12 +404,14 @@ function renderList(){
           <label class="wide">One line<input name="oneLiner" value="${esc(i.oneLiner)}" ${dis}></label>
           <label class="wide">Why it stalled<input name="whyStopped" value="${esc(i.whyStopped)}" placeholder="Be honest. Future you will read this." ${dis}></label>
           <label class="wide">Next step<input name="nextStep" value="${esc(i.nextStep)}" ${dis}></label>
+          <label class="wide">What happened / what it became<input name="outcome" value="${esc(i.outcome)}" placeholder="Used by 40 people, became X, taught me Y" ${dis}></label>
           <label class="wide">Notes<textarea name="notes" ${dis}>${esc(i.notes)}</textarea></label>
-          <div class="row wide"><button class="primary" type="submit" ${dis}>Save</button><button type="button" data-touch="${esc(i.id)}" ${dis}>I worked on this today</button></div>
+          <div class="row wide"><button class="primary" type="submit" ${dis}>Save</button></div>
         </form>
       </details>
     </div>`;
   }).join("");
+  for (const [k,v] of Object.entries(drafts)) { const el = document.querySelector(`[data-keep="${CSS.escape(k)}"]`); if (el) el.value = v; }
 }
 $("list").addEventListener("submit", async e => {
   e.preventDefault(); const f = e.target; const id = f.dataset.id;
@@ -365,9 +419,57 @@ $("list").addEventListener("submit", async e => {
   await patch(id, data); toast("Saved");
 });
 $("list").addEventListener("click", async e => {
-  const b = e.target.closest("button[data-touch]"); if(!b) return;
-  await patch(b.dataset.touch, { lastTouched: today() }); toast("Logged");
+  const b = e.target.closest("button"); if(!b) return;
+  const d = b.dataset;
+  if (d.touch){ await patch(d.touch, { lastTouched: today() }); toast("Logged. The quiet timer is reset."); }
+  else if (d.archive){ await archive(d.archive); }
+  else if (d.restore){ const i = byId(d.restore); await patch(d.restore, { status: i?.statusBeforeArchive || "parked" }); toast("Restored"); }
+  else if (d.star){
+    const i = byId(d.star);
+    if (i?.starred){ await patch(d.star, { starred:false }); toast("Star removed. Your reason is kept."); return; }
+    const box = document.querySelector(`.starbox[data-id="${CSS.escape(d.star)}"]`); box.hidden = false; box.querySelector("textarea").focus();
+  }
+  else if (d.starCancel){ document.querySelector(`.starbox[data-id="${CSS.escape(d.starCancel)}"]`).hidden = true; }
+  else if (d.starSave){ await starIdea(d.starSave, b); }
 });
+const byId = id => state.ideas.find(i=>i.id===id);
+async function archive(id){
+  const i = byId(id);
+  await patch(id, { status:"archived", statusBeforeArchive: i?.status || "parked", archivedAt: today() });
+  toast("Archived. Nothing deleted. Find it under the Archived filter.");
+}
+async function starIdea(id, btn){
+  const i = byId(id); const box = document.querySelector(`.starbox[data-id="${CSS.escape(id)}"]`);
+  const why = box.querySelector("textarea").value.trim();
+  if (why.length < 15){ toast("Give it a real reason, at least a sentence."); return; }
+  btn.disabled = true;
+  await patch(id, { starred:true, starWhy: why, starredAt: today(), starCritique: sample ? "Claude is reading your reason..." : "" });
+  box.hidden = true;
+  if (!sample){ toast("Starred. Paste the vault into a chat for feedback on your reason."); return; }
+  const g = state.goal;
+  const prompt = `Someone with ADHD who starts many ideas and finishes few has just starred an idea as a favourite they ran out of time for. Be supportive of the person and honest about the reason. Their main life goal right now (North Star) is: ${g?.title || "not set"}${g?.deadline ? " by " + g.deadline : ""}.
+
+Idea: ${i.name}
+What it is: ${i.oneLiner || "(no description)"}
+Status: ${i.status}. Days since last touched: ${daysSince(i.lastTouched || i.born) ?? "unknown"}.
+Why it stalled before: ${i.whyStopped || "(never recorded)"}
+Their reason for starring it: "${why}"
+
+Critique the reason in plain text, under 120 words, in exactly this shape:
+Strong: what in the reason is genuinely solid.
+Weak: what sounds like novelty, guilt or hyperfixation rather than evidence.
+Answer this: the one question they must answer before touching it again.
+Verdict: one of "Keep the star", "Keep the star if <condition>", or "Archive it", plus how it relates to the North Star.`;
+  try {
+    const { text } = await sample(prompt, { cache: false });
+    await patch(id, { starCritique: text.trim() });
+    toast("Starred, with feedback.");
+  } catch (e) {
+    await patch(id, { starCritique: "" });
+    if (e.code === "not_granted" || e.code === "sampling_disabled") toast("Starred. Claude feedback is turned off for this page.");
+    else toast("Starred. Feedback didn't come through. Unstar and star again to retry.");
+  }
+}
 
 async function patch(id, data){
   try { await db.doc("ideas/"+id).update(data); }
