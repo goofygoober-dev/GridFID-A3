@@ -1,0 +1,424 @@
+<title>Idea Vault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single working column. North Star pinned on top, then what to resurface, then capture, then the archive drawer. */
+:root{
+  --bg:#eef1f4; --surface:#fbfcfd; --ink:#16202b; --muted:#5d6b79; --line:#d3dae1;
+  --accent:#c2410c; --accent-soft:#fde7d9; --star:#1d3a5c; --star-fg:#f2f5f8;
+  --ok:#2f7d4f; --warn:#a16207; --bad:#b42318; --chip:#e4e9ee;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151c; --surface:#17202a; --ink:#e3e9ef; --muted:#93a1ae; --line:#2a3642;
+  --accent:#fb8a4c; --accent-soft:#3a2216; --star:#1f3550; --star-fg:#e8eef4;
+  --ok:#5fc48a; --warn:#e0b04a; --bad:#f07a6e; --chip:#223040; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151c; --surface:#17202a; --ink:#e3e9ef; --muted:#93a1ae; --line:#2a3642;
+  --accent:#fb8a4c; --accent-soft:#3a2216; --star:#1f3550; --star-fg:#e8eef4;
+  --ok:#5fc48a; --warn:#e0b04a; --bad:#f07a6e; --chip:#223040; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);padding-inline:16px;padding-block:20px 48px}
+main{max-width:860px;margin:0 auto;display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:1.9rem;font-weight:700}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:1.05rem;font-weight:600}
+.label{font:500 .72rem/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;width:100%}
+textarea{min-height:72px;resize:vertical}
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:end;justify-content:space-between}
+.head p{margin:4px 0 0;max-width:60ch}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* North Star */
+.star{background:var(--star);color:var(--star-fg);border-radius:10px;padding:20px;display:grid;gap:10px}
+.star .label{color:var(--star-fg);opacity:.75}
+.star h2{font-size:1.6rem}
+.star p{margin:0;max-width:65ch}
+.star .meta{display:flex;flex-wrap:wrap;gap:18px;font:500 .85rem var(--mono)}
+.star button{background:transparent;color:var(--star-fg);border-color:rgba(255,255,255,.35)}
+.star form{display:grid;gap:8px}
+.star input,.star textarea{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);color:var(--star-fg)}
+
+/* Resurface */
+.resurface{display:grid;gap:12px}
+.picks{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.pick{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:grid;gap:6px;min-width:0}
+.pick .why{font-size:.88rem;color:var(--muted)}
+.ask{background:var(--accent-soft);border-radius:8px;padding:14px;display:grid;gap:10px}
+.ask-out{white-space:pre-wrap;min-width:0}
+
+/* Capture */
+.capture{display:grid;gap:8px;grid-template-columns:1fr 2fr auto;align-items:end}
+.capture label{display:grid;gap:4px;min-width:0}
+@media (max-width:640px){.capture{grid-template-columns:1fr}}
+.nudge{font-size:.88rem;color:var(--warn)}
+
+/* Stats */
+.stats{display:flex;flex-wrap:wrap;gap:24px;font-variant-numeric:tabular-nums}
+.stat b{display:block;font:700 1.4rem var(--display)}
+
+/* Vault */
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters button{border-radius:999px;padding:4px 12px;font-size:.85rem}
+.filters button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.list{display:grid;gap:0;border-top:1px solid var(--line)}
+.item{border-bottom:1px solid var(--line);padding:12px 0;display:grid;gap:6px;min-width:0}
+.item-top{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between}
+.item-top h3{min-width:0;overflow-wrap:anywhere}
+.chip{font:500 .72rem/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:4px 8px;border-radius:4px;background:var(--chip);white-space:nowrap}
+.s-testing,.s-pursuing{background:var(--accent-soft);color:var(--accent)}
+.s-killed{color:var(--muted);text-decoration:line-through}
+.s-unreviewed{border:1px dashed var(--muted);background:transparent}
+.fit-helps{color:var(--ok)} .fit-distracts{color:var(--bad)}
+.facts{font:400 .8rem var(--mono);color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 14px;font-variant-numeric:tabular-nums}
+.item details summary{cursor:pointer;color:var(--muted);font-size:.88rem}
+.edit{display:grid;gap:8px;grid-template-columns:1fr 1fr;padding-top:8px}
+.edit label{display:grid;gap:4px;font-size:.85rem;min-width:0}
+.edit .wide{grid-column:1/-1}
+@media (max-width:640px){.edit{grid-template-columns:1fr}}
+a{color:var(--accent)}
+.empty{padding:20px;border:1px dashed var(--line);border-radius:8px;color:var(--muted)}
+.bridge{display:grid;gap:8px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:.9rem}
+@media (prefers-reduced-motion:no-preference){.pick,.item{transition:background .15s}}
+</style>
+
+<main>
+  <header class="head">
+    <div>
+      <div class="label">Idea Vault</div>
+      <h1>Nothing gets buried here.</h1>
+      <p class="muted">Every idea, brand and repo in one place, measured against the one goal that matters right now.</p>
+    </div>
+  </header>
+
+  <section class="star" id="star" aria-labelledby="star-title">
+    <div class="label">North Star</div>
+    <div id="star-view">
+      <h2 id="star-title">No North Star set yet</h2>
+      <p id="star-why" class="muted"></p>
+    </div>
+    <div class="meta" id="star-meta"></div>
+    <div class="row"><button id="star-edit" type="button">Edit North Star</button></div>
+    <form id="star-form" hidden>
+      <input id="g-title" placeholder="The one goal (e.g. Land a new job)" required>
+      <textarea id="g-why" placeholder="Why it matters now"></textarea>
+      <input id="g-deadline" type="date" aria-label="Deadline">
+      <input id="g-weekly" placeholder="Weekly target (e.g. 5 applications, 2 coffee chats)">
+      <input id="g-next" placeholder="Next concrete action">
+      <div class="row"><button class="primary" type="submit">Save</button><button type="button" id="star-cancel">Cancel</button></div>
+    </form>
+  </section>
+
+  <section class="resurface" aria-labelledby="rs-title">
+    <div class="head"><h2 id="rs-title">Worth a second look</h2><span class="label">picked from your archive</span></div>
+    <div class="picks" id="picks"><div class="empty">Your archive is loading. Ideas that fit your North Star and have gone quiet the longest show up here.</div></div>
+    <div class="ask" id="ask" hidden>
+      <div class="row" style="justify-content:space-between">
+        <strong>Ask Claude what to focus on this week</strong>
+        <div class="row"><button class="primary" id="ask-btn" type="button">Ask Claude</button><button id="ask-stop" type="button" hidden>Stop</button></div>
+      </div>
+      <div class="ask-out" id="ask-out">Claude reads your North Star and every idea in the vault, then names at most one idea to touch this week and one action toward your goal.</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="cap-title" style="display:grid;gap:10px">
+    <h2 id="cap-title">Capture a spark</h2>
+    <form class="capture" id="cap-form">
+      <label>Name<input id="c-name" required placeholder="Working name"></label>
+      <label>One line<input id="c-line" placeholder="Who it's for and what it does"></label>
+      <button class="primary" type="submit">Add to vault</button>
+    </form>
+    <div class="nudge" id="nudge" hidden></div>
+  </section>
+
+  <section aria-labelledby="stat-title" style="display:grid;gap:10px">
+    <h2 id="stat-title" class="label">Your pattern, last 30 days</h2>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section aria-labelledby="v-title" style="display:grid;gap:12px">
+    <div class="head"><h2 id="v-title">The archive</h2><input id="search" placeholder="Search ideas" style="max-width:240px"></div>
+    <div class="filters" id="filters"></div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section class="bridge" aria-labelledby="b-title">
+    <h2 id="b-title">Bring it into a chat</h2>
+    <p class="muted" style="margin:0">Copy the vault, paste it into any Claude chat, and the Idea Gauntlet skill checks new ideas against everything here. When Claude hands back an <code>idea-vault</code> JSON block, paste it below to save it.</p>
+    <div class="row"><button id="copy" type="button">Copy vault for Claude</button></div>
+    <textarea id="import" placeholder='Paste an idea-vault JSON block from Claude, e.g. {"ideas":[{"name":"…","status":"parked"}]}'></textarea>
+    <div class="row"><button id="import-btn" type="button">Save to vault</button><span id="import-msg" class="muted"></span></div>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const STATUSES = ["unreviewed","spark","testing","pursuing","parked","killed"];
+const STATUS_LABEL = {unreviewed:"Unreviewed",spark:"Spark",testing:"Testing",pursuing:"Pursuing",parked:"Parked",killed:"Killed"};
+const FITS = {helps:"Helps goal",neutral:"Neutral",distracts:"Distracts"};
+const state = { ideas: [], goal: null, filter: "all", q: "", canWrite: true };
+let db = null;
+const $ = id => document.getElementById(id);
+const DAY = 864e5;
+const daysSince = iso => iso ? Math.floor((Date.now() - new Date(iso).getTime()) / DAY) : null;
+const today = () => new Date().toISOString();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || ("idea-" + Date.now());
+
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2200); }
+
+/* ---------- North Star ---------- */
+function renderGoal(){
+  const g = state.goal;
+  $("star-title").textContent = g?.title || "No North Star set yet";
+  $("star-why").textContent = g?.why || "Set the one goal everything else gets measured against.";
+  const meta = [];
+  if (g?.deadline){ const left = Math.ceil((new Date(g.deadline) - Date.now())/DAY); meta.push(`${left >= 0 ? left + " days left" : Math.abs(left) + " days past deadline"}`); }
+  if (g?.weekly) meta.push("This week: " + g.weekly);
+  if (g?.next) meta.push("Next: " + g.next);
+  $("star-meta").innerHTML = meta.map(m=>`<span>${esc(m)}</span>`).join("");
+}
+$("star-edit").onclick = () => {
+  const g = state.goal || {};
+  $("g-title").value = g.title||""; $("g-why").value = g.why||""; $("g-deadline").value = (g.deadline||"").slice(0,10);
+  $("g-weekly").value = g.weekly||""; $("g-next").value = g.next||"";
+  $("star-form").hidden = false; $("star-edit").hidden = true;
+};
+$("star-cancel").onclick = () => { $("star-form").hidden = true; $("star-edit").hidden = false; };
+$("star-form").onsubmit = async e => {
+  e.preventDefault();
+  const g = { title:$("g-title").value.trim(), why:$("g-why").value.trim(), deadline:$("g-deadline").value||"", weekly:$("g-weekly").value.trim(), next:$("g-next").value.trim(), updatedAt: today() };
+  try { await db.doc("goals/north-star").set(g); toast("North Star saved"); } catch(err){ toast("Couldn't save. You may only have view access."); }
+  $("star-form").hidden = true; $("star-edit").hidden = false;
+};
+
+/* ---------- Resurface ---------- */
+function resurfaceScore(i){
+  const fit = i.goalFit === "helps" ? 3 : i.goalFit === "distracts" ? -2 : 0;
+  const quality = (Number(i.score)||0) / 16 * 3;
+  const quiet = Math.min((daysSince(i.lastTouched || i.born) ?? 0) / 30, 3);
+  return fit + quality + quiet;
+}
+function reasonFor(i){
+  const d = daysSince(i.lastTouched || i.born);
+  const parts = [];
+  if (d != null) parts.push(`Untouched for ${d} day${d===1?"":"s"}.`);
+  if (i.goalFit === "helps") parts.push("You marked it as helping your North Star.");
+  if (i.score) parts.push(`Scored ${i.score}/16 last time.`);
+  if (i.whyStopped) parts.push(`You stopped because: ${i.whyStopped}`);
+  else parts.push("You never wrote down why it stalled.");
+  return parts.join(" ");
+}
+function renderPicks(){
+  const pool = state.ideas.filter(i => !["killed","testing","pursuing"].includes(i.status));
+  const picks = pool.sort((a,b)=>resurfaceScore(b)-resurfaceScore(a)).slice(0,3);
+  $("picks").innerHTML = picks.length ? picks.map(i=>`
+    <div class="pick">
+      <div class="row" style="justify-content:space-between"><h3>${esc(i.name)}</h3><span class="chip s-${i.status}">${STATUS_LABEL[i.status]||i.status}</span></div>
+      ${i.oneLiner?`<div>${esc(i.oneLiner)}</div>`:""}
+      <div class="why">${esc(reasonFor(i))}</div>
+      <div class="row"><button type="button" data-act="test" data-id="${esc(i.id)}">Start testing</button><button type="button" data-act="kill" data-id="${esc(i.id)}">Let it go</button></div>
+    </div>`).join("") : `<div class="empty">Nothing to resurface yet. Capture a spark below, or paste ideas from a chat.</div>`;
+}
+$("picks").onclick = async e => {
+  const b = e.target.closest("button[data-act]"); if(!b) return;
+  const id = b.dataset.id;
+  if (b.dataset.act === "test"){
+    const busy = state.ideas.find(i=>i.status==="testing" && i.id!==id);
+    if (busy && !b.dataset.confirm){ b.dataset.confirm="1"; b.textContent=`Park "${busy.name}" and switch?`; return; }
+    if (busy) await patch(busy.id,{status:"parked", whyStopped: busy.whyStopped || "Parked to test another idea"});
+    await patch(id,{status:"testing", checkIn: new Date(Date.now()+14*DAY).toISOString().slice(0,10)});
+    toast("Testing. Check-in set for 14 days out.");
+  } else {
+    await patch(id,{status:"killed"}); toast("Let go. It stays in the archive.");
+  }
+};
+
+/* ---------- Ask Claude ---------- */
+let sample = null, askCtl = null;
+function vaultText(){
+  const g = state.goal;
+  const lines = [];
+  lines.push("# Idea Vault export " + today().slice(0,10));
+  lines.push("## North Star");
+  lines.push(g ? `${g.title}${g.deadline?` (deadline ${g.deadline})`:""}\nWhy: ${g.why||"-"}\nWeekly target: ${g.weekly||"-"}\nNext action: ${g.next||"-"}` : "Not set");
+  lines.push("## Ideas");
+  lines.push("| id | name | status | goal fit | score/16 | days quiet | why stopped | one line | links |");
+  lines.push("|---|---|---|---|---|---|---|---|---|");
+  for (const i of state.ideas){
+    const links = (i.assets||[]).map(a=>a.url).join(" ");
+    lines.push(`| ${i.id} | ${i.name} | ${i.status} | ${i.goalFit||"?"} | ${i.score??"-"} | ${daysSince(i.lastTouched||i.born)??"-"} | ${(i.whyStopped||"").replace(/\|/g,"/")} | ${(i.oneLiner||"").replace(/\|/g,"/")} | ${links} |`);
+  }
+  return lines.join("\n");
+}
+$("ask-btn").onclick = async () => {
+  askCtl = new AbortController();
+  $("ask-btn").disabled = true; $("ask-stop").hidden = false; $("ask-out").textContent = "Thinking...";
+  const prompt = `You are a supportive but blunt focus coach for someone with ADHD who starts many ideas and finishes few. Their North Star goal outranks every side idea.
+
+Using the vault below, reply in plain text under 180 words with exactly these parts:
+1. North Star action: one concrete thing to do toward the North Star in the next 48 hours.
+2. One idea to touch: name at most ONE idea (by name) worth 2 hours this week, and say how it serves the North Star (e.g. as a portfolio piece or job lead). If none qualifies, say "None. Protect the North Star."
+3. Let go: up to 3 ideas to mark killed or parked, with one short reason each.
+4. Pattern: one sentence on what the archive says about how they work.
+
+${vaultText().slice(0,60000)}`;
+  try {
+    await sample(prompt, { signal: askCtl.signal, onText: ({text}) => { $("ask-out").textContent = text; } });
+  } catch (e) {
+    $("ask-out").textContent = e.text ?? "";
+    if (e.code === "not_granted" || e.code === "sampling_disabled") { $("ask").hidden = true; }
+    else if (e.code === "rate_limited") toast("Too many requests. Try again in a bit.");
+    else if (e.code !== "cancelled") toast("Claude couldn't answer that time. Try again.");
+  } finally { $("ask-btn").disabled = false; $("ask-stop").hidden = true; }
+};
+$("ask-stop").onclick = () => askCtl?.abort();
+
+/* ---------- Capture ---------- */
+$("cap-form").onsubmit = async e => {
+  e.preventDefault();
+  const name = $("c-name").value.trim(); if(!name) return;
+  const id = slug(name) + "-" + Date.now().toString(36).slice(-4);
+  const doc = { name, oneLiner:$("c-line").value.trim(), status:"spark", born: today(), lastTouched: today(), goalFit:"neutral", source:"vault page" };
+  try { await db.doc("ideas/"+id).set(doc); $("cap-form").reset(); toast("Captured. It's safe in the vault."); }
+  catch { toast("Couldn't save. You may only have view access."); }
+};
+function renderNudge(){
+  const testing = state.ideas.filter(i=>i.status==="testing");
+  const recent = state.ideas.filter(i=>i.status==="spark" && (daysSince(i.born)??99) <= 7).length;
+  const msgs = [];
+  if (testing.length) msgs.push(`You're testing "${testing[0].name}". New sparks are welcome, they just wait in the vault until that test reports back.`);
+  if (recent >= 3) msgs.push(`${recent} new sparks this week. Capture freely, but nothing new gets built until one gets tested.`);
+  $("nudge").textContent = msgs.join(" "); $("nudge").hidden = !msgs.length;
+}
+
+/* ---------- Stats ---------- */
+function renderStats(){
+  const within = i => (daysSince(i.born) ?? 999) <= 30;
+  const started = state.ideas.filter(within).length;
+  const tested = state.ideas.filter(i => ["testing","pursuing"].includes(i.status)).length;
+  const killed = state.ideas.filter(i => i.status==="killed").length;
+  const unreviewed = state.ideas.filter(i => i.status==="unreviewed").length;
+  const st = [["New ideas",started],["Being tested",tested],["Let go",killed],["Never reviewed",unreviewed],["Total in vault",state.ideas.length]];
+  $("stats").innerHTML = st.map(([k,v])=>`<div class="stat"><b>${v}</b><span class="label">${k}</span></div>`).join("");
+}
+
+/* ---------- Archive ---------- */
+function renderFilters(){
+  const counts = Object.fromEntries(STATUSES.map(s=>[s,0])); state.ideas.forEach(i=>counts[i.status]=(counts[i.status]||0)+1);
+  const opts = [["all","All",state.ideas.length], ...STATUSES.map(s=>[s,STATUS_LABEL[s],counts[s]])];
+  $("filters").innerHTML = opts.map(([k,l,n])=>`<button type="button" data-f="${k}" aria-pressed="${state.filter===k}">${l} ${n}</button>`).join("");
+}
+$("filters").onclick = e => { const b=e.target.closest("button[data-f]"); if(!b) return; state.filter=b.dataset.f; renderFilters(); renderList(); };
+$("search").oninput = e => { state.q = e.target.value.toLowerCase(); renderList(); };
+
+function renderList(){
+  const open = new Set([...document.querySelectorAll(".item details[open]")].map(d=>d.dataset.id));
+  let items = state.ideas.slice();
+  if (state.filter !== "all") items = items.filter(i=>i.status===state.filter);
+  if (state.q) items = items.filter(i => (i.name+" "+(i.oneLiner||"")+" "+(i.notes||"")).toLowerCase().includes(state.q));
+  items.sort((a,b)=> (b.lastTouched||b.born||"").localeCompare(a.lastTouched||a.born||""));
+  if (!items.length){ $("list").innerHTML = `<div class="empty">${state.ideas.length ? "No ideas match this filter." : "The vault is empty. Capture your first spark above."}</div>`; return; }
+  const dis = state.canWrite ? "" : "disabled";
+  $("list").innerHTML = items.map(i=>{
+    const quiet = daysSince(i.lastTouched||i.born);
+    const links = (i.assets||[]).map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.label||a.type||"link")}</a>`).join(" · ");
+    return `<div class="item">
+      <div class="item-top"><h3>${esc(i.name)}</h3><div class="row"><span class="chip s-${esc(i.status)}">${STATUS_LABEL[i.status]||esc(i.status)}</span></div></div>
+      ${i.oneLiner?`<div>${esc(i.oneLiner)}</div>`:""}
+      <div class="facts">
+        <span>${quiet!=null?`quiet ${quiet}d`:"no date"}</span>
+        ${i.goalFit?`<span class="fit-${esc(i.goalFit)}">${FITS[i.goalFit]||esc(i.goalFit)}</span>`:""}
+        ${i.score!=null && i.score!==""?`<span>score ${esc(i.score)}/16</span>`:""}
+        ${i.checkIn?`<span>check-in ${esc(i.checkIn)}</span>`:""}
+        ${links?`<span>${links}</span>`:""}
+      </div>
+      ${i.whyStopped?`<div class="muted" style="font-size:.9rem">Stopped because: ${esc(i.whyStopped)}</div>`:""}
+      <details data-id="${esc(i.id)}" ${open.has(i.id)?"open":""}><summary>Edit</summary>
+        <form class="edit" data-id="${esc(i.id)}">
+          <label>Status<select name="status" ${dis}>${STATUSES.map(s=>`<option value="${s}" ${s===i.status?"selected":""}>${STATUS_LABEL[s]}</option>`).join("")}</select></label>
+          <label>Fit with North Star<select name="goalFit" ${dis}>${Object.entries(FITS).map(([k,l])=>`<option value="${k}" ${k===i.goalFit?"selected":""}>${l}</option>`).join("")}</select></label>
+          <label class="wide">One line<input name="oneLiner" value="${esc(i.oneLiner)}" ${dis}></label>
+          <label class="wide">Why it stalled<input name="whyStopped" value="${esc(i.whyStopped)}" placeholder="Be honest. Future you will read this." ${dis}></label>
+          <label class="wide">Next step<input name="nextStep" value="${esc(i.nextStep)}" ${dis}></label>
+          <label class="wide">Notes<textarea name="notes" ${dis}>${esc(i.notes)}</textarea></label>
+          <div class="row wide"><button class="primary" type="submit" ${dis}>Save</button><button type="button" data-touch="${esc(i.id)}" ${dis}>I worked on this today</button></div>
+        </form>
+      </details>
+    </div>`;
+  }).join("");
+}
+$("list").addEventListener("submit", async e => {
+  e.preventDefault(); const f = e.target; const id = f.dataset.id;
+  const data = Object.fromEntries(new FormData(f).entries());
+  await patch(id, data); toast("Saved");
+});
+$("list").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-touch]"); if(!b) return;
+  await patch(b.dataset.touch, { lastTouched: today() }); toast("Logged");
+});
+
+async function patch(id, data){
+  try { await db.doc("ideas/"+id).update(data); }
+  catch { toast("Couldn't save. You may only have view access."); }
+}
+
+/* ---------- Bridge ---------- */
+$("copy").onclick = async () => {
+  const txt = vaultText();
+  try { await navigator.clipboard.writeText(txt); toast("Copied. Paste it into a Claude chat."); }
+  catch { $("import").value = txt; $("import").select(); toast("Select-all is ready. Copy it from the box."); }
+};
+$("import-btn").onclick = async () => {
+  const raw = $("import").value.trim(); if(!raw) return;
+  let obj;
+  try { const m = raw.match(/\{[\s\S]*\}/); obj = JSON.parse(m ? m[0] : raw); }
+  catch { $("import-msg").textContent = "That isn't valid JSON. Paste only the idea-vault block."; return; }
+  let n = 0;
+  try {
+    if (obj.goal && typeof obj.goal === "object") { const cur = (await db.doc("goals/north-star").get()).data() || {}; await db.doc("goals/north-star").set({...cur, ...obj.goal, updatedAt: today()}); }
+    for (const raw of (Array.isArray(obj.ideas) ? obj.ideas : [])) {
+      if (!raw || !raw.name) continue;
+      const id = raw.id ? slug(raw.id) : slug(raw.name);
+      const ref = db.doc("ideas/"+id);
+      const cur = (await ref.get()).data() || { born: today(), status: "spark", goalFit: "neutral" };
+      const next = { ...cur, ...raw, lastTouched: raw.lastTouched || today() };
+      delete next.id;
+      if (!STATUSES.includes(next.status)) next.status = "spark";
+      await ref.set(next); n++;
+    }
+    $("import-msg").textContent = `Saved ${n} idea${n===1?"":"s"}${obj.goal?" and the North Star":""}.`;
+    $("import").value = "";
+  } catch { $("import-msg").textContent = "Couldn't save. You may only have view access."; }
+};
+
+/* ---------- Boot ---------- */
+function renderAll(){ renderGoal(); renderPicks(); renderNudge(); renderStats(); renderFilters(); renderList(); }
+renderAll();
+(async () => {
+  db = await claude.use("db");
+  if (!db) { $("picks").innerHTML = `<div class="empty">Open this page in Claude while signed in to load your vault.</div>`; $("list").innerHTML=""; return; }
+  const user = await claude.use("user");
+  const cw = user ? await user.can("data.write") : null;
+  state.canWrite = cw !== false;
+  if (!state.canWrite) { $("cap-form").hidden = true; $("star-edit").hidden = true; $("import-btn").disabled = true; }
+  db.doc("goals/north-star").onSnapshot(s => { state.goal = s.exists ? s.data() : null; renderGoal(); }, () => {});
+  db.collection("ideas").onSnapshot(s => {
+    state.ideas = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderPicks(); renderNudge(); renderStats(); renderFilters(); renderList();
+  }, () => { $("list").innerHTML = `<div class="empty">The vault couldn't load. Reload the page to try again.</div>`; });
+  sample = await claude.use("sample");
+  $("ask").hidden = !sample;
+})();
+</script>
